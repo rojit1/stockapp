@@ -1,10 +1,7 @@
-from django.core.mail import EmailMessage
+from .tasks import send_mail
 
 class Util:
 
     @staticmethod
     def send_email(data):
-        subject = data['subject']
-        body =  data['body']
-        email = EmailMessage(subject=subject, body=body, to=[data['to']])
-        email.send()
+        send_mail.delay(data)

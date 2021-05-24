@@ -5,6 +5,7 @@ from rest_framework import  serializers
 from rest_framework.exceptions import AuthenticationFailed
 from .models import Account
 
+# serializer for registering user
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
@@ -14,6 +15,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return Account.objects.create_user(**validated_data)
 
+# serilizer for Login
 class LoginSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()
     tokens = serializers.SerializerMethodField()

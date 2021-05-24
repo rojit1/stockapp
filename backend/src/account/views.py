@@ -67,3 +67,14 @@ class LoginView(APIView):
             'data':serializer.data
         }
         return response
+
+class LogoutView(APIView):
+
+    def post(self, request):
+        try:
+            refresh_token = request.data['refresh']
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
