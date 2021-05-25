@@ -2,6 +2,9 @@ from django.urls import reverse
 from django.contrib.sites.shortcuts import get_current_site
 from django.conf import settings
 import jwt
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import smart_str, force_str, smart_bytes, DjangoUnicodeDecodeError
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 
 from rest_framework.views import APIView
@@ -11,10 +14,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import AllowAny
 from decouple import config
 
-from .serializers import RegisterSerializer, LoginSerializer
+from .serializers import RegisterSerializer, LoginSerializer, SetNewPasswordSerializer
 from .utils import Util
 from django.contrib.auth import get_user_model
 Account = get_user_model()
+
 
 class RegisterView(APIView):
     permission_classes = AllowAny,
@@ -35,6 +39,7 @@ class RegisterView(APIView):
         Util.send_email(data)
         return Response({'details':'Please check your email and verify your account','data':serializer.data}, status=status.HTTP_201_CREATED)
 
+
 class VerifyEmailView(APIView):
 
     permission_classes = AllowAny,
@@ -53,6 +58,7 @@ class VerifyEmailView(APIView):
         except jwt.exceptions.DecodeError:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
 
+
 class LoginView(APIView):
 
     permission_classes = AllowAny,
@@ -68,6 +74,7 @@ class LoginView(APIView):
         }
         return response
 
+
 class LogoutView(APIView):
 
     def post(self, request):
@@ -78,3 +85,58 @@ class LogoutView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception:
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+class RequestPasswordResetView(APIView):
+
+    permission_classes = AllowAny,
+
+    def post(self, request):
+        email = request.data.get('email','')
+
+        if Account.objects.filter(email=email).exists():
+            user = Account.objects.get(email=email)
+            if not user.is_active:
+                return Response({'details':'The provided account doesnot exists'}, status=status.HTTP_404_NOT_FOUND)
+
+            uid = urlsafe_base64_encode(smart_bytes(user.id))
+            token = PasswordResetTokenGenerator().make_token(user)
+            current_site = get_current_site(request).domain
+            relative_link = reverse('account:token-check', kwargs={'uid':uid,'token':token})
+            abs_url = config('SSL')+'://'+current_site+relative_link
+            body = "Hello, use the link below to reset your password \n"+abs_url
+            data = {'subject':'Reset your password','body':body, 'to':user.email}
+            Util.send_email(data)
+            return Response({'details':'The password reset link is sent in mail'}, status=status.HTTP_200_OK)
+
+        return Response({'details':'The provided email doesnot exists'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class PasswordTokenCheckView(APIView):
+
+    permission_classes = AllowAny,
+
+    def get(self, request, uid, token):
+        try:
+            id = force_str(smart_bytes(urlsafe_base64_decode(uid)))
+            user = Account.objects.get(id=id)
+
+            if not PasswordResetTokenGenerator().check_token(user, token):
+                return Response({'details':'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+
+            return Response({'details':'Success','data':{'uid':uid,'token':token}}, status=status.HTTP_200_OK)
+
+
+        except DjangoUnicodeDecodeError:
+            return Response({'details':'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        except Account.DoesNotExist:
+            return Response({'details':"The user account doesnot exists"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class SetNewPasswordView(APIView):
+    permission_classes = AllowAny,
+    def patch(self, request):
+        serializer = SetNewPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response({'details':'Password reset successful'}, status=status.HTTP_200_OK)
+
