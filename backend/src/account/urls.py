@@ -18,5 +18,4 @@ urlpatterns = [
     path('token-check/<uid>/<token>/', PasswordTokenCheckView.as_view(), name="token-check"),
     path('set-new-password/', SetNewPasswordView.as_view(), name="set-new-password"),
 
-
 ]
